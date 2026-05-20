@@ -385,6 +385,14 @@
               <canvas id="templateCanvas" style="max-width:100%; height:auto; cursor:crosshair; box-shadow:0 4px 6px rgba(0,0,0,0.1); background:#fff;"></canvas>
             </div>
 
+            <div class="form-group" id="editorFieldSelectorGroup" style="margin-bottom:16px; display:none;">
+              <label style="font-weight:600; color:var(--gray-700);">Select Field to Edit</label>
+              <select id="editorFieldSelector" class="filter-select" style="width:100%">
+                <option value="participant">Participant Name</option>
+                <option value="team">Team Name</option>
+              </select>
+            </div>
+
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px; margin-bottom:16px;">
               <div class="form-group"><label>X Position (% from left)</label><input type="number" id="nameX" value="50" min="0" max="100" step="1"/></div>
               <div class="form-group"><label>Y Position (% from top)</label><input type="number" id="nameY" value="50" min="0" max="100" step="1"/></div>

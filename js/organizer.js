@@ -63,23 +63,140 @@ function statusBadge(s){const m={pending:'badge-warning',generated:'badge-info',
 function renderRecent(){const tb=document.getElementById('recentParticipantsBody');if(!participants.length){tb.innerHTML='<tr><td colspan="4" class="table-empty"><span class="empty-icon">👤</span>No participants yet</td></tr>';return}
 tb.innerHTML=participants.slice(0,5).map(p=>`<tr><td>${p.name}</td><td>${p.email}</td><td>${statusBadge(p.status)}</td><td><button class="btn-secondary" onclick="switchPanel('participants')">View</button></td></tr>`).join('')}
 
-function renderParticipants(){const tb=document.getElementById('participantsTableBody');const search=(document.getElementById('searchParticipants')?.value||'').toLowerCase();const filter=document.getElementById('statusFilter')?.value||'';let list=participants;if(search)list=list.filter(p=>(p.name||'').toLowerCase().includes(search)||(p.email||'').toLowerCase().includes(search));if(filter)list=list.filter(p=>p.status===filter);
-if(!list.length){tb.innerHTML='<tr><td colspan="6" class="table-empty"><span class="empty-icon">👥</span>No participants found</td></tr>';document.getElementById('participantPagination').textContent='Showing 0';return}
-tb.innerHTML=list.map(p=>`<tr><td><input type="checkbox" class="p-check" data-id="${p.id}"/></td><td>${p.name}</td><td>${p.email}</td><td>${statusBadge(p.status)}</td><td>${p.certificateUrl?`<a href="${p.certificateUrl}" target="_blank" class="btn-secondary" style="font-size:.75rem;padding:4px 10px">View</a>`:'—'}</td><td><button class="btn-outline" style="padding:4px 10px;font-size:.75rem" onclick="editParticipant('${p.id}')">Edit</button> <button class="btn-danger" style="padding:4px 10px;font-size:.75rem" onclick="deleteParticipant('${p.id}')">Delete</button></td></tr>`).join('');
-document.getElementById('participantPagination').textContent=`Showing ${list.length} of ${participants.length}`}
+function renderParticipants(){
+  const tb=document.getElementById('participantsTableBody');
+  const search=(document.getElementById('searchParticipants')?.value||'').toLowerCase();
+  const filter=document.getElementById('statusFilter')?.value||'';
+  let list=participants;
+  if(search)list=list.filter(p=>(p.name||'').toLowerCase().includes(search)||(p.email||'').toLowerCase().includes(search)||(p.teamName||'').toLowerCase().includes(search));
+  if(filter)list=list.filter(p=>p.status===filter);
+  
+  const hasTeam = participants.some(p => p.teamName && p.teamName.trim() !== '');
+  const tableHeader = document.querySelector('#panel-participants table thead tr');
+  if (tableHeader) {
+    tableHeader.innerHTML = `
+      <th><input type="checkbox" id="selectAll"/></th>
+      <th>Name</th>
+      <th>Email</th>
+      ${hasTeam ? '<th>Team Name</th>' : ''}
+      <th>Status</th>
+      <th>Certificate</th>
+      <th>Actions</th>
+    `;
+  }
+  
+  const colSpan = hasTeam ? 7 : 6;
+  if(!list.length){
+    tb.innerHTML=`<tr><td colspan="${colSpan}" class="table-empty"><span class="empty-icon">👥</span>No participants found</td></tr>`;
+    document.getElementById('participantPagination').textContent='Showing 0';
+    return;
+  }
+  
+  tb.innerHTML=list.map(p=>`
+    <tr>
+      <td><input type="checkbox" class="p-check" data-id="${p.id}"/></td>
+      <td>${p.name}</td>
+      <td>${p.email}</td>
+      ${hasTeam ? `<td>${p.teamName || '—'}</td>` : ''}
+      <td>${statusBadge(p.status)}</td>
+      <td>${p.certificateUrl?`<a href="${p.certificateUrl}" target="_blank" class="btn-secondary" style="font-size:.75rem;padding:4px 10px">View</a>`:'—'}</td>
+      <td>
+        <button class="btn-outline" style="padding:4px 10px;font-size:.75rem" onclick="editParticipant('${p.id}')">Edit</button> 
+        <button class="btn-danger" style="padding:4px 10px;font-size:.75rem" onclick="deleteParticipant('${p.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+  document.getElementById('participantPagination').textContent=`Showing ${list.length} of ${participants.length}`;
+}
 
 function renderTemplates(){const el=document.getElementById('templatesList');if(!templates.length){el.innerHTML='<div class="table-empty"><span class="empty-icon">🖼️</span>No templates uploaded yet</div>';document.getElementById('namePosCard').style.display='none';return}
 document.getElementById('namePosCard').style.display='block';el.innerHTML=templates.map(t=>`<div class="cert-item"><div class="cert-thumb"><img src="${t.templateUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<div class=cert-thumb-inner><div class=cert-thumb-badge>🖼️</div><div class=cert-thumb-name>Template</div></div>'"/></div><div class="cert-item-body"><div class="cert-item-name">Certificate Template</div><div class="cert-item-email">${new Date(t.createdAt?.seconds*1000||Date.now()).toLocaleDateString()}</div><div class="cert-item-actions"><button class="btn-danger" style="font-size:.75rem;padding:4px 10px" onclick="deleteTemplate('${t.id}')">Delete</button></div></div></div>`).join(''); initTemplateEditor(templates[0]);}
+let currentTemplateSettings = {
+  nameX: 50,
+  nameY: 50,
+  nameFontSize: 48,
+  nameColor: '#1e293b',
+  nameFontFamily: 'Inter, sans-serif',
+  nameAlign: 'center',
+
+  teamX: 50,
+  teamY: 60,
+  teamFontSize: 36,
+  teamColor: '#475569',
+  teamFontFamily: 'Inter, sans-serif',
+  teamAlign: 'center'
+};
+
 let editorImg = null;
-function initTemplateEditor(t) {
-  document.getElementById('nameX').value = t.nameX ?? 50;
-  document.getElementById('nameY').value = t.nameY ?? 50;
-  document.getElementById('nameFontSize').value = t.nameFontSize ?? 48;
-  const color = t.nameColor ?? '#1e293b';
+
+function updateControlsFromSettings() {
+  const isTeam = document.getElementById('editorFieldSelector')?.value === 'team';
+  const prefix = isTeam ? 'team' : 'name';
+
+  document.getElementById('nameX').value = currentTemplateSettings[prefix + 'X'];
+  document.getElementById('nameY').value = currentTemplateSettings[prefix + 'Y'];
+  document.getElementById('nameFontSize').value = currentTemplateSettings[prefix + 'FontSize'];
+  const color = currentTemplateSettings[prefix + 'Color'];
   document.getElementById('nameColor').value = color;
   if (document.getElementById('nameColorHex')) document.getElementById('nameColorHex').value = color;
-  document.getElementById('nameFontFamily').value = t.nameFontFamily ?? 'Inter, sans-serif';
-  document.getElementById('nameAlign').value = t.nameAlign ?? 'center';
+  document.getElementById('nameFontFamily').value = currentTemplateSettings[prefix + 'FontFamily'];
+  document.getElementById('nameAlign').value = currentTemplateSettings[prefix + 'Align'];
+}
+
+function updateSettingsFromControls() {
+  const isTeam = document.getElementById('editorFieldSelector')?.value === 'team';
+  const prefix = isTeam ? 'team' : 'name';
+
+  currentTemplateSettings[prefix + 'X'] = parseInt(document.getElementById('nameX').value || 50);
+  currentTemplateSettings[prefix + 'Y'] = parseInt(document.getElementById('nameY').value || 50);
+  currentTemplateSettings[prefix + 'FontSize'] = parseInt(document.getElementById('nameFontSize').value || 48);
+  currentTemplateSettings[prefix + 'Color'] = document.getElementById('nameColor').value || '#1e293b';
+  currentTemplateSettings[prefix + 'FontFamily'] = document.getElementById('nameFontFamily').value || 'Inter, sans-serif';
+  currentTemplateSettings[prefix + 'Align'] = document.getElementById('nameAlign').value || 'center';
+}
+
+function drawTextWithFitting(ctx, text, x, y, size, family, align, color, maxWidth) {
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  
+  let currentSize = size;
+  ctx.font = `bold ${currentSize}px ${family}`;
+  let textWidth = ctx.measureText(text).width;
+  
+  while (textWidth > maxWidth && currentSize > 10) {
+    currentSize -= 2;
+    ctx.font = `bold ${currentSize}px ${family}`;
+    textWidth = ctx.measureText(text).width;
+  }
+  
+  ctx.fillText(text, x, y);
+}
+
+function initTemplateEditor(t) {
+  currentTemplateSettings = {
+    nameX: t.nameX ?? 50,
+    nameY: t.nameY ?? 50,
+    nameFontSize: t.nameFontSize ?? 48,
+    nameColor: t.nameColor ?? '#1e293b',
+    nameFontFamily: t.nameFontFamily ?? 'Inter, sans-serif',
+    nameAlign: t.nameAlign ?? 'center',
+
+    teamX: t.teamX ?? 50,
+    teamY: t.teamY ?? 60,
+    teamFontSize: t.teamFontSize ?? 36,
+    teamColor: t.teamColor ?? '#475569',
+    teamFontFamily: t.teamFontFamily ?? 'Inter, sans-serif',
+    teamAlign: t.teamAlign ?? 'center'
+  };
+
+  const hasTeam = participants.some(p => p.teamName && p.teamName.trim() !== '');
+  const selectorGroup = document.getElementById('editorFieldSelectorGroup');
+  if (selectorGroup) {
+    selectorGroup.style.display = hasTeam ? 'block' : 'none';
+  }
+  
+  updateControlsFromSettings();
 
   editorImg = new Image();
   editorImg.crossOrigin = 'anonymous';
@@ -103,26 +220,39 @@ function drawEditorPreview() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.drawImage(editorImg, 0, 0);
 
-    const pctX = parseInt(document.getElementById('nameX').value || 50);
-    const pctY = parseInt(document.getElementById('nameY').value || 50);
-    const size = parseInt(document.getElementById('nameFontSize').value || 48);
-    const color = document.getElementById('nameColor').value || '#1e293b';
-    const family = document.getElementById('nameFontFamily').value || 'Inter, sans-serif';
-    const align = document.getElementById('nameAlign').value || 'center';
+    const hasTeam = participants.some(p => p.teamName && p.teamName.trim() !== '');
 
-    const x = (pctX / 100) * canvas.width;
-    const y = (pctY / 100) * canvas.height;
+    // Draw Participant Name
+    {
+      const x = (currentTemplateSettings.nameX / 100) * canvas.width;
+      const y = (currentTemplateSettings.nameY / 100) * canvas.height;
+      const size = currentTemplateSettings.nameFontSize;
+      const color = currentTemplateSettings.nameColor;
+      const family = currentTemplateSettings.nameFontFamily;
+      const align = currentTemplateSettings.nameAlign;
+      const maxWidth = canvas.width * 0.9;
+      drawTextWithFitting(ctx, "Sample Name", x, y, size, family, align, color, maxWidth);
+    }
 
-    ctx.fillStyle = color;
-    ctx.font = `bold ${size}px ${family}`;
-    ctx.textAlign = align;
-    ctx.textBaseline = 'middle';
-    ctx.fillText("Sample Name", x, y);
+    // Draw Team Name
+    if (hasTeam) {
+      const x = (currentTemplateSettings.teamX / 100) * canvas.width;
+      const y = (currentTemplateSettings.teamY / 100) * canvas.height;
+      const size = currentTemplateSettings.teamFontSize;
+      const color = currentTemplateSettings.teamColor;
+      const family = currentTemplateSettings.teamFontFamily;
+      const align = currentTemplateSettings.teamAlign;
+      const maxWidth = canvas.width * 0.9;
+      drawTextWithFitting(ctx, "Sample Team Name", x, y, size, family, align, color, maxWidth);
+    }
   });
 }
 
 ['nameX', 'nameY', 'nameFontSize', 'nameFontFamily', 'nameAlign'].forEach(id => {
-  document.getElementById(id)?.addEventListener('input', drawEditorPreview);
+  document.getElementById(id)?.addEventListener('input', () => {
+    updateSettingsFromControls();
+    drawEditorPreview();
+  });
 });
 
 // Color Picker Sync Logic
@@ -133,11 +263,13 @@ const colorSwatches = document.querySelectorAll('.color-swatch');
 function updateColor(color) {
   if(nameColorInput) nameColorInput.value = color;
   if(nameColorHex) nameColorHex.value = color;
+  updateSettingsFromControls();
   drawEditorPreview();
 }
 
 nameColorInput?.addEventListener('input', (e) => {
   if(nameColorHex) nameColorHex.value = e.target.value;
+  updateSettingsFromControls();
   drawEditorPreview();
 });
 
@@ -146,6 +278,7 @@ nameColorHex?.addEventListener('input', (e) => {
   if (!val.startsWith('#')) val = '#' + val;
   if (val.match(/^#[0-9A-Fa-f]{6}$/)) {
     if(nameColorInput) nameColorInput.value = val;
+    updateSettingsFromControls();
     drawEditorPreview();
   }
 });
@@ -155,6 +288,11 @@ colorSwatches.forEach(swatch => {
     e.preventDefault();
     updateColor(e.target.dataset.color);
   });
+});
+
+document.getElementById('editorFieldSelector')?.addEventListener('change', () => {
+  updateControlsFromSettings();
+  drawEditorPreview();
 });
 
 document.getElementById('templateCanvas')?.addEventListener('mousedown', (e) => {
@@ -168,10 +306,28 @@ document.getElementById('templateCanvas')?.addEventListener('mousedown', (e) => 
 
   const pctX = Math.round((clickX / canvas.width) * 100);
   const pctY = Math.round((clickY / canvas.height) * 100);
-  
-  document.getElementById('nameX').value = Math.max(0, Math.min(100, pctX));
-  document.getElementById('nameY').value = Math.max(0, Math.min(100, pctY));
-  
+
+  const hasTeam = participants.some(p => p.teamName && p.teamName.trim() !== '');
+  let field = 'participant';
+
+  if (hasTeam) {
+    const nameDist = Math.hypot(pctX - currentTemplateSettings.nameX, pctY - currentTemplateSettings.nameY);
+    const teamDist = Math.hypot(pctX - currentTemplateSettings.teamX, pctY - currentTemplateSettings.teamY);
+    if (teamDist < nameDist) {
+      field = 'team';
+    }
+  }
+
+  const selector = document.getElementById('editorFieldSelector');
+  if (selector && hasTeam) {
+    selector.value = field;
+  }
+
+  const prefix = field === 'team' ? 'team' : 'name';
+  currentTemplateSettings[prefix + 'X'] = Math.max(0, Math.min(100, pctX));
+  currentTemplateSettings[prefix + 'Y'] = Math.max(0, Math.min(100, pctY));
+
+  updateControlsFromSettings();
   drawEditorPreview();
 });
 function renderSendStatus(){const tb=document.getElementById('sendStatusBody');if(!participants.length){tb.innerHTML='<tr><td colspan="5" class="table-empty"><span class="empty-icon">📨</span>No data</td></tr>';return}
@@ -191,7 +347,31 @@ document.getElementById('logoutBtn')?.addEventListener('click',async()=>{await s
 document.getElementById('refreshBtn')?.addEventListener('click',()=>loadData());
 
 // Add participant modal
-function openParticipantModal(p=null){document.getElementById('participantModal').classList.add('active');document.getElementById('participantModalTitle').textContent=p?'Edit Participant':'Add Participant';document.getElementById('pName').value=p?.name||'';document.getElementById('pEmail').value=p?.email||'';document.getElementById('participantModalError').textContent='';document.getElementById('saveParticipantBtn').dataset.editId=p?.id||''}
+function openParticipantModal(p=null){
+  document.getElementById('participantModal').classList.add('active');
+  document.getElementById('participantModalTitle').textContent=p?'Edit Participant':'Add Participant';
+  document.getElementById('pName').value=p?.name||'';
+  document.getElementById('pEmail').value=p?.email||'';
+  
+  const hasTeam = participants.some(x => x.teamName && x.teamName.trim() !== '');
+  let pTeamGroup = document.getElementById('pTeamGroup');
+  if (hasTeam) {
+    if (!pTeamGroup) {
+      pTeamGroup = document.createElement('div');
+      pTeamGroup.className = 'form-group';
+      pTeamGroup.id = 'pTeamGroup';
+      pTeamGroup.innerHTML = '<label>Team Name</label><input type="text" id="pTeam" placeholder="Team Name"/>';
+      const errEl = document.getElementById('participantModalError');
+      errEl.parentNode.insertBefore(pTeamGroup, errEl);
+    }
+    document.getElementById('pTeam').value = p?.teamName || '';
+  } else {
+    if (pTeamGroup) pTeamGroup.remove();
+  }
+  
+  document.getElementById('participantModalError').textContent='';
+  document.getElementById('saveParticipantBtn').dataset.editId=p?.id||'';
+}
 function closeParticipantModal(){document.getElementById('participantModal').classList.remove('active')}
 document.getElementById('addParticipantBtn')?.addEventListener('click',()=>openParticipantModal());
 document.getElementById('addParticipantBtn2')?.addEventListener('click',()=>openParticipantModal());
@@ -200,6 +380,7 @@ document.getElementById('cancelParticipantBtn')?.addEventListener('click',closeP
 
 document.getElementById('saveParticipantBtn')?.addEventListener('click',async()=>{
 const name=document.getElementById('pName').value.trim(),email=document.getElementById('pEmail').value.trim();
+const teamVal = document.getElementById('pTeam')?.value.trim() || '';
 const errEl=document.getElementById('participantModalError');
 if(!name||!email){errEl.textContent='Please fill all fields';return}
 const btn=document.getElementById('saveParticipantBtn');
@@ -207,8 +388,8 @@ const originalText=btn.textContent;
 btn.disabled=true;btn.textContent='Saving…';btn.style.opacity='0.7';errEl.textContent='';
 const editId=btn.dataset.editId;
 try{
-if(editId){await updateDoc(doc(db,'participants',editId),{name,email});toast('Participant updated','success')}
-else{const id=crypto.randomUUID();await setDoc(doc(db,'participants',id),{id,name,email,certificateUrl:'',status:'pending',createdBy:currentUser.uid,createdAt:serverTimestamp()});toast('Participant added','success')}
+if(editId){await updateDoc(doc(db,'participants',editId),{name,email,teamName:teamVal});toast('Participant updated','success')}
+else{const id=crypto.randomUUID();await setDoc(doc(db,'participants',id),{id,name,email,teamName:teamVal,certificateUrl:'',status:'pending',createdBy:currentUser.uid,createdAt:serverTimestamp()});toast('Participant added','success')}
 closeParticipantModal();await loadData()
 }catch(e){errEl.textContent='Error: '+e.message}
 finally{btn.disabled=false;btn.textContent=originalText;btn.style.opacity='1'}});
@@ -234,21 +415,56 @@ reader.onload=ev=>{
 const text=ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
 const lines=text.split('\n').filter(l=>l.trim());
 if(!lines.length){toast('CSV file is empty','warning');return}
-csvData=[];let start=0;
-const first=lines[0].toLowerCase();
-if(first.includes('name')&&first.includes('email'))start=1;
+
+csvData=[];
+const firstLine = lines[0];
+const headers = firstLine.split(',').map(p => p.trim().replace(/^["']|["']$/g,'').toLowerCase());
+
+const hasNameHeader = headers.some(h => h.includes('name'));
+const hasEmailHeader = headers.some(h => h.includes('email'));
+const hasTeamHeader = headers.some(h => h === 'team_name' || h === 'team name' || h === 'team');
+
+let nameIdx = 0;
+let emailIdx = 1;
+let teamIdx = -1;
+let start = 0;
+
+if (hasNameHeader || hasEmailHeader || hasTeamHeader) {
+  start = 1;
+  const nameIndex = headers.findIndex(h => h.includes('name'));
+  if (nameIndex !== -1) nameIdx = nameIndex;
+  const emailIndex = headers.findIndex(h => h.includes('email'));
+  if (emailIndex !== -1) emailIdx = emailIndex;
+  teamIdx = headers.findIndex(h => h === 'team_name' || h === 'team name' || h === 'team');
+}
+
 for(let i=start;i<lines.length;i++){
-const parts=lines[i].split(',');
-if(parts.length>=2){
-const name=parts[0].trim().replace(/^["']|["']$/g,'');
-const email=parts[1].trim().replace(/^["']|["']$/g,'');
-if(name&&email){csvData.push({name,email})}
-}}
+  const parts=lines[i].split(',').map(p => p.trim().replace(/^["']|["']$/g,''));
+  if(parts.length > Math.max(nameIdx, emailIdx)){
+    const name = parts[nameIdx];
+    const email = parts[emailIdx];
+    const teamName = teamIdx !== -1 && teamIdx < parts.length ? parts[teamIdx] : '';
+    if(name && email){
+      csvData.push({ name, email, teamName });
+    }
+  }
+}
+
 if(!csvData.length){toast('No valid entries found in CSV. Expected format: name, email','warning');return}
 document.getElementById('csvCount').textContent=csvData.length;
 const tb=document.getElementById('csvPreviewBody');
-tb.innerHTML=csvData.slice(0,10).map(r=>`<tr><td>${r.name}</td><td>${r.email}</td></tr>`).join('');
-if(csvData.length>10)tb.innerHTML+=`<tr><td colspan="2" style="text-align:center;color:var(--gray-500);font-size:.8rem">… and ${csvData.length-10} more</td></tr>`;
+const hasTeam = csvData.some(r => r.teamName && r.teamName.trim() !== '');
+
+const previewHeader = document.querySelector('#csvPreview table thead tr');
+if (previewHeader) {
+  previewHeader.innerHTML = `<th>Name</th><th>Email</th>${hasTeam ? '<th>Team Name</th>' : ''}`;
+}
+
+tb.innerHTML=csvData.slice(0,10).map(r=>`<tr><td>${r.name}</td><td>${r.email}</td>${hasTeam ? `<td>${r.teamName || ''}</td>` : ''}</tr>`).join('');
+if(csvData.length>10) {
+  const colSpan = hasTeam ? 3 : 2;
+  tb.innerHTML+=`<tr><td colspan="${colSpan}" style="text-align:center;color:var(--gray-500);font-size:.8rem">… and ${csvData.length-10} more</td></tr>`;
+}
 document.getElementById('csvPreview').style.display='block';
 toast(`${csvData.length} entries found in CSV`,'info')};
 reader.onerror=()=>{toast('Failed to read CSV file','error')};
@@ -274,7 +490,7 @@ let imported=0;
 try{
 for(const r of csvData){
 const id=crypto.randomUUID();
-await setDoc(doc(db,'participants',id),{id,name:r.name,email:r.email,certificateUrl:'',status:'pending',createdBy:currentUser.uid,createdAt:serverTimestamp()});
+await setDoc(doc(db,'participants',id),{id,name:r.name,email:r.email,teamName:r.teamName||'',certificateUrl:'',status:'pending',createdBy:currentUser.uid,createdAt:serverTimestamp()});
 imported++;
 btn.textContent=`Importing… (${imported}/${csvData.length})`}
 toast(`✅ ${imported} participants imported successfully!`,'success');
@@ -454,9 +670,9 @@ document.getElementById('bulkGenerate')?.addEventListener('click',()=>{const ids
 document.getElementById('bulkSend')?.addEventListener('click',async()=>{const ids=[...document.querySelectorAll('.p-check:checked')].map(c=>c.dataset.id);if(!ids.length){toast('Select participants first','warning');return}const selected=participants.filter(p=>ids.includes(p.id)&&p.certificateUrl);if(!selected.length){toast('Selected participants have no generated certificates','warning');return}toast(`Sending to ${selected.length} selected participants...`,'info');const progFill=document.getElementById('genProgressFill');const progText=document.getElementById('genProgressText');for(let i=0;i<selected.length;i++){const p=selected[i];try{await sendCertificateEmail(p.email,p.name,p.id);await updateDoc(doc(db,'participants',p.id),{status:'sent'});const pct=Math.round((i+1)/selected.length*100);if(progFill)progFill.style.width=pct+'%';if(progText)progText.textContent=`Sending selected ${i+1} of ${selected.length}...`;await sleep(1500)}catch(e){console.error(e)}}toast('Selected emails sent!','success');await loadData()});
 
 // ====== EMAIL CONFIGURATION (EMAILJS) ======
-const EMAILJS_SERVICE_ID = 'service_9ufz44g'; // Replace with your Service ID
-const EMAILJS_TEMPLATE_ID = 'template_du8z35s'; // Replace with your Template ID
-const EMAILJS_PUBLIC_KEY = 'hZB7XEss_dtv2h_LX'; // Replace with your Public Key
+const EMAILJS_SERVICE_ID = 'service_05d8c9n'; // Replace with your Service ID
+const EMAILJS_TEMPLATE_ID = 'template_r4mwbzm'; // Replace with your Template ID
+const EMAILJS_PUBLIC_KEY = '3rfve5lbj2orQ0IEg'; // Replace with your Public Key
 // ===========================================
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -465,13 +681,16 @@ const APP_URL = 'https://PavanWadile77.github.io/Mr.Certi.H';
 // ========================================================
 
 async function sendCertificateEmail(email, name, participantId) {
-  if (EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID') {
-    console.warn('EmailJS not configured. Skipping email for ' + email);
-    return; 
+  if (!EMAILJS_SERVICE_ID || EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID') {
+    const msg = 'EmailJS is not configured properly. Missing Service ID.';
+    toast(msg, 'error');
+    throw new Error(msg);
   }
   
   if (!participantId) {
-    throw new Error('Invalid participant ID');
+    const msg = 'Invalid participant ID. Cannot send email.';
+    toast(msg, 'error');
+    throw new Error(msg);
   }
   
   const viewUrl = `${APP_URL}/view-certificate.html?id=${participantId}`;
@@ -483,24 +702,52 @@ async function sendCertificateEmail(email, name, participantId) {
     template_params: {
       to_email: email,
       to_name: name,
+      name: name, // Added to support both {{name}} and {{to_name}}
+      from_name: currentUser?.name || "Mr.Certi Platform",
+      from_email: currentUser?.email || "",
+      reply_to: currentUser?.email || "",
       message: `Congratulations ${name}! Your certificate has been issued. Click the link below to view and download your certificate.`,
       certificate_url: viewUrl,
       attachment_base64: ''
     }
   };
   
-  const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  
-  if (!response.ok) {
-    const text = await response.text();
-    console.error('EmailJS error:', text);
-    throw new Error('EmailJS failed: ' + text);
+  try {
+    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const text = await response.text();
+      let errorMsg = `EmailJS API Error (${response.status}): ${text}`;
+      
+      // Parse common EmailJS configuration mistakes
+      if (text.includes('service is disabled') || text.includes('No service is connected')) {
+         errorMsg = 'EmailJS: Your email service (e.g. Gmail) is disconnected. Please link it in your EmailJS dashboard.';
+      } else if (text.includes('The public key is invalid')) {
+         errorMsg = 'EmailJS: Invalid Public Key. Check your Account settings.';
+      } else if (text.includes('The template ID is invalid')) {
+         errorMsg = 'EmailJS: Invalid Template ID.';
+      } else if (text.includes('The service ID is invalid')) {
+         errorMsg = 'EmailJS: Invalid Service ID.';
+      }
+      
+      console.error('EmailJS request failed with response:', text);
+      toast(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+    
+    console.log(`✅ Email successfully sent to ${email} via EmailJS`);
+    // toast(`Email sent to ${email}`, 'success'); // We omit the success toast to prevent spamming when bulk sending, the progress bar handles it!
+  } catch (error) {
+    console.error('Network or Execution error in EmailJS:', error);
+    if (!error.message.includes('EmailJS:')) {
+       toast(`Email Failed (${email}): ${error.message}`, 'error');
+    }
+    throw error;
   }
-  console.log('EmailJS success for ' + email);
 }
 
 async function generateAllCerts(){const pending=participants.filter(p=>p.status==='pending');if(!pending.length){toast('No pending participants','warning');return}await generateCerts(pending)}
@@ -548,12 +795,22 @@ for(let i=0;i<list.length;i++){
     // Scale font size proportionally if image was downscaled
     const scale = w / img.naturalWidth;
     const scaledFontSize = Math.round(fontSize * scale);
+    const maxNameWidth = w * 0.9;
+    drawTextWithFitting(ctx, p.name, w*nameX/100, h*nameY/100, scaledFontSize, fontFamily, align, fontColor, maxNameWidth);
 
-    ctx.fillStyle=fontColor;
-    ctx.font=`bold ${scaledFontSize}px ${fontFamily}`;
-    ctx.textAlign=align;
-    ctx.textBaseline='middle';
-    ctx.fillText(p.name, w*nameX/100, h*nameY/100);
+    const hasTeam = participants.some(x => x.teamName && x.teamName.trim() !== '');
+    if (hasTeam && p.teamName) {
+      const teamX = template.teamX ?? 50;
+      const teamY = template.teamY ?? 60;
+      const teamFontSize = template.teamFontSize ?? 36;
+      const teamFontFamily = template.teamFontFamily ?? 'Inter, sans-serif';
+      const teamAlign = template.teamAlign ?? 'center';
+      const teamColor = template.teamColor ?? '#475569';
+      
+      const scaledTeamFontSize = Math.round(teamFontSize * scale);
+      const maxTeamWidth = w * 0.9;
+      drawTextWithFitting(ctx, p.teamName, w*teamX/100, h*teamY/100, scaledTeamFontSize, teamFontFamily, teamAlign, teamColor, maxTeamWidth);
+    }
 
     // Step 3: Convert to compressed base64
     const certDataUrl = canvas.toDataURL('image/jpeg', 0.5);
@@ -642,12 +899,19 @@ document.getElementById('saveNamePos')?.addEventListener('click', async () => {
   
   const t = templates[0];
   const settings = {
-    nameX: parseInt(document.getElementById('nameX').value),
-    nameY: parseInt(document.getElementById('nameY').value),
-    nameFontSize: parseInt(document.getElementById('nameFontSize').value),
-    nameColor: document.getElementById('nameColor').value,
-    nameFontFamily: document.getElementById('nameFontFamily').value,
-    nameAlign: document.getElementById('nameAlign').value
+    nameX: currentTemplateSettings.nameX,
+    nameY: currentTemplateSettings.nameY,
+    nameFontSize: currentTemplateSettings.nameFontSize,
+    nameColor: currentTemplateSettings.nameColor,
+    nameFontFamily: currentTemplateSettings.nameFontFamily,
+    nameAlign: currentTemplateSettings.nameAlign,
+
+    teamX: currentTemplateSettings.teamX,
+    teamY: currentTemplateSettings.teamY,
+    teamFontSize: currentTemplateSettings.teamFontSize,
+    teamColor: currentTemplateSettings.teamColor,
+    teamFontFamily: currentTemplateSettings.teamFontFamily,
+    teamAlign: currentTemplateSettings.teamAlign
   };
   
   try {
