@@ -1,9 +1,9 @@
 const https = require('https');
 
 const payload = JSON.stringify({
-  service_id: 'service_05d8c9n',
-  template_id: 'template_94d87qx',
-  user_id: '3rfve5lbj2orQ0IEg',
+  service_id: 'service_mrcerti',
+  template_id: 'template_mrcerti',
+  user_id: 'Dq-bj8zPJBm3JrmCO',
   template_params: {
     to_email: 'test@example.com',
     to_name: 'Test',

@@ -1,10 +1,8 @@
-# Mr.Certi – E-Certificate Distribution Platform
-
+Mr.Certi – E-Certificate Distribution Platform
 https://pavanwadile77.github.io/Mr.Certi.H/
 
-
-
 A modern web application for automated certificate generation, distribution, and tracking.
+
 
 ## ✨ Features
 

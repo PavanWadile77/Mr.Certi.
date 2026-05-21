@@ -670,9 +670,9 @@ document.getElementById('bulkGenerate')?.addEventListener('click',()=>{const ids
 document.getElementById('bulkSend')?.addEventListener('click',async()=>{const ids=[...document.querySelectorAll('.p-check:checked')].map(c=>c.dataset.id);if(!ids.length){toast('Select participants first','warning');return}const selected=participants.filter(p=>ids.includes(p.id)&&p.certificateUrl);if(!selected.length){toast('Selected participants have no generated certificates','warning');return}toast(`Sending to ${selected.length} selected participants...`,'info');const progFill=document.getElementById('genProgressFill');const progText=document.getElementById('genProgressText');for(let i=0;i<selected.length;i++){const p=selected[i];try{await sendCertificateEmail(p.email,p.name,p.id);await updateDoc(doc(db,'participants',p.id),{status:'sent'});const pct=Math.round((i+1)/selected.length*100);if(progFill)progFill.style.width=pct+'%';if(progText)progText.textContent=`Sending selected ${i+1} of ${selected.length}...`;await sleep(1500)}catch(e){console.error(e)}}toast('Selected emails sent!','success');await loadData()});
 
 // ====== EMAIL CONFIGURATION (EMAILJS) ======
-const EMAILJS_SERVICE_ID = 'service_05d8c9n'; // Replace with your Service ID
-const EMAILJS_TEMPLATE_ID = 'template_r4mwbzm'; // Replace with your Template ID
-const EMAILJS_PUBLIC_KEY = '3rfve5lbj2orQ0IEg'; // Replace with your Public Key
+const EMAILJS_SERVICE_ID = 'service_mrcerti'; // Replace with your Service ID
+const EMAILJS_TEMPLATE_ID = 'template_mrcerti'; // Replace with your Template ID
+const EMAILJS_PUBLIC_KEY = 'Dq-bj8zPJBm3JrmCO'; // Replace with your Public Key
 // ===========================================
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
