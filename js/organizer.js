@@ -681,6 +681,13 @@ const APP_URL = 'https://PavanWadile77.github.io/Mr.Certi.H';
 // ========================================================
 
 async function sendCertificateEmail(email, name, participantId) {
+  email = (email || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const msg = `Invalid email address for ${name}: "${email}"`;
+    toast(msg, 'error');
+    throw new Error(msg);
+  }
+
   if (!EMAILJS_SERVICE_ID || EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID') {
     const msg = 'EmailJS is not configured properly. Missing Service ID.';
     toast(msg, 'error');
