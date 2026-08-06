@@ -112,6 +112,9 @@ function renderParticipants(){
 function renderTemplates(){const el=document.getElementById('templatesList');if(!templates.length){el.innerHTML='<div class="table-empty"><span class="empty-icon">🖼️</span>No templates uploaded yet</div>';document.getElementById('namePosCard').style.display='none';return}
 document.getElementById('namePosCard').style.display='block';el.innerHTML=templates.map(t=>`<div class="cert-item"><div class="cert-thumb"><img src="${t.templateUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<div class=cert-thumb-inner><div class=cert-thumb-badge>🖼️</div><div class=cert-thumb-name>Template</div></div>'"/></div><div class="cert-item-body"><div class="cert-item-name">Certificate Template</div><div class="cert-item-email">${new Date(t.createdAt?.seconds*1000||Date.now()).toLocaleDateString()}</div><div class="cert-item-actions"><button class="btn-danger" style="font-size:.75rem;padding:4px 10px" onclick="deleteTemplate('${t.id}')">Delete</button></div></div></div>`).join(''); initTemplateEditor(templates[0]);}
 let currentTemplateSettings = {
+  isAutoPlacement: false,
+  autoY: 52,
+
   nameX: 50,
   nameY: 50,
   nameFontSize: 48,
@@ -129,6 +132,98 @@ let currentTemplateSettings = {
 
 let editorImg = null;
 
+// Dominant background color and empty vertical band detection
+function detectTemplateEmptyZone(img) {
+  if (!img || !img.naturalWidth) {
+    return { y: 52, isLightBg: true, textColor: '#1e293b', teamColor: '#475569' };
+  }
+  try {
+    const tempCanvas = document.createElement('canvas');
+    const scanWidth = 300;
+    const scanHeight = Math.round((img.naturalHeight / img.naturalWidth) * scanWidth);
+    tempCanvas.width = scanWidth;
+    tempCanvas.height = scanHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(img, 0, 0, scanWidth, scanHeight);
+    
+    const imgData = tempCtx.getImageData(0, 0, scanWidth, scanHeight);
+    const data = imgData.data;
+    
+    const colorCounts = {};
+    const sampleStep = 4;
+    for (let y = 0; y < scanHeight; y += sampleStep) {
+      for (let x = 0; x < scanWidth; x += sampleStep) {
+        const idx = (y * scanWidth + x) * 4;
+        const r = data[idx];
+        const g = data[idx+1];
+        const b = data[idx+2];
+        const key = `${Math.floor(r/12)*12},${Math.floor(g/12)*12},${Math.floor(b/12)*12}`;
+        colorCounts[key] = (colorCounts[key] || 0) + 1;
+      }
+    }
+    
+    let dominantColorKey = '255,255,255';
+    let maxCount = 0;
+    for (const key in colorCounts) {
+      if (colorCounts[key] > maxCount) {
+        maxCount = colorCounts[key];
+        dominantColorKey = key;
+      }
+    }
+    const [domR, domG, domB] = dominantColorKey.split(',').map(Number);
+    
+    const rowDensities = new Array(scanHeight).fill(0);
+    for (let y = 0; y < scanHeight; y++) {
+      let nonBgCount = 0;
+      for (let x = 0; x < scanWidth; x++) {
+        const idx = (y * scanWidth + x) * 4;
+        const r = data[idx];
+        const g = data[idx+1];
+        const b = data[idx+2];
+        const dist = Math.sqrt((r - domR)**2 + (g - domG)**2 + (b - domB)**2);
+        if (dist > 35) {
+          nonBgCount++;
+        }
+      }
+      rowDensities[y] = nonBgCount / scanWidth;
+    }
+    
+    const minY = Math.round(scanHeight * 0.30);
+    const maxY = Math.round(scanHeight * 0.75);
+    const windowSize = Math.round(scanHeight * 0.12);
+    let bestWindowY = Math.round(scanHeight * 0.52);
+    let minScore = Infinity;
+    
+    for (let y = minY; y <= maxY - windowSize; y++) {
+      let sumDensity = 0;
+      for (let wy = 0; wy < windowSize; wy++) {
+        sumDensity += rowDensities[y + wy];
+      }
+      const avgDensity = sumDensity / windowSize;
+      const centerOffset = Math.abs((y + windowSize / 2) - scanHeight * 0.52) / scanHeight;
+      const score = avgDensity + centerOffset * 0.18;
+      
+      if (score < minScore) {
+        minScore = score;
+        bestWindowY = y;
+      }
+    }
+    
+    const detectedY = Math.round(((bestWindowY + windowSize / 2) / scanHeight) * 100);
+    const isLightBg = (domR + domG + domB) > 380;
+    
+    return {
+      y: Math.max(30, Math.min(75, detectedY)),
+      isLightBg,
+      textColor: isLightBg ? '#1e293b' : '#f8fafc',
+      teamColor: isLightBg ? '#475569' : '#cbd5e1'
+    };
+  } catch (err) {
+    console.error('Error in detectTemplateEmptyZone:', err);
+    return { y: 52, isLightBg: true, textColor: '#1e293b', teamColor: '#475569' };
+  }
+}
+
 function updateControlsFromSettings() {
   const isTeam = document.getElementById('editorFieldSelector')?.value === 'team';
   const prefix = isTeam ? 'team' : 'name';
@@ -144,15 +239,28 @@ function updateControlsFromSettings() {
 }
 
 function updateSettingsFromControls() {
+  if (currentTemplateSettings.isAutoPlacement) {
+    // Under Auto Placement, X/Y and alignment are locked
+    currentTemplateSettings.nameX = 50;
+    currentTemplateSettings.teamX = 50;
+    currentTemplateSettings.nameAlign = 'center';
+    currentTemplateSettings.teamAlign = 'center';
+    currentTemplateSettings.nameY = currentTemplateSettings.autoY;
+    currentTemplateSettings.teamY = currentTemplateSettings.autoY;
+  }
+
   const isTeam = document.getElementById('editorFieldSelector')?.value === 'team';
   const prefix = isTeam ? 'team' : 'name';
 
-  currentTemplateSettings[prefix + 'X'] = parseInt(document.getElementById('nameX').value || 50);
-  currentTemplateSettings[prefix + 'Y'] = parseInt(document.getElementById('nameY').value || 50);
+  if (!currentTemplateSettings.isAutoPlacement) {
+    currentTemplateSettings[prefix + 'X'] = parseInt(document.getElementById('nameX').value || 50);
+    currentTemplateSettings[prefix + 'Y'] = parseInt(document.getElementById('nameY').value || 50);
+    currentTemplateSettings[prefix + 'Align'] = document.getElementById('nameAlign').value || 'center';
+  }
+
   currentTemplateSettings[prefix + 'FontSize'] = parseInt(document.getElementById('nameFontSize').value || 48);
   currentTemplateSettings[prefix + 'Color'] = document.getElementById('nameColor').value || '#1e293b';
   currentTemplateSettings[prefix + 'FontFamily'] = document.getElementById('nameFontFamily').value || 'Inter, sans-serif';
-  currentTemplateSettings[prefix + 'Align'] = document.getElementById('nameAlign').value || 'center';
 }
 
 function drawTextWithFitting(ctx, text, x, y, size, family, align, color, maxWidth) {
@@ -173,8 +281,166 @@ function drawTextWithFitting(ctx, text, x, y, size, family, align, color, maxWid
   ctx.fillText(text, x, y);
 }
 
+// Unified Certificate drawing system supporting both Automatic & Manual positions
+function drawCertificateText(ctx, name, teamName, hasTeam, w, h, scale, template) {
+  const isAuto = template.isAutoPlacement ?? false;
+  
+  const align = template.nameAlign ?? 'center';
+  const fontFamily = template.nameFontFamily ?? 'Inter, sans-serif';
+  const fontColor = template.nameColor ?? '#1e293b';
+  
+  const teamAlign = template.teamAlign ?? 'center';
+  const teamFontFamily = template.teamFontFamily ?? 'Inter, sans-serif';
+  const teamColor = template.teamColor ?? '#475569';
+  
+  if (isAuto) {
+    // ---- AUTO PLACEMENT MODE ----
+    const autoX = w * 0.5;
+    const autoYVal = template.autoY ?? template.nameY ?? 52;
+    const autoY = h * (autoYVal / 100);
+    
+    // Scale font size according to final canvas width w
+    const maxFontSize = template.nameFontSize ?? 48;
+    const maxTeamFontSize = template.teamFontSize ?? 36;
+    
+    const baseNameFontSize = Math.min(maxFontSize * scale, Math.round(w * 0.045));
+    const baseTeamFontSize = Math.min(maxTeamFontSize * scale, Math.round(w * 0.032));
+    
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // 1. Smart Text Fitting for Name
+    let nameSize = baseNameFontSize;
+    ctx.font = `bold ${nameSize}px ${fontFamily}`;
+    const maxNameWidth = w * 0.8;
+    let nameWidth = ctx.measureText(name).width;
+    
+    while (nameWidth > maxNameWidth && nameSize > 12) {
+      nameSize -= 2;
+      ctx.font = `bold ${nameSize}px ${fontFamily}`;
+      nameWidth = ctx.measureText(name).width;
+    }
+    
+    // 2. Smart Text Fitting for Team (if present)
+    let teamSize = baseTeamFontSize;
+    let teamWidth = 0;
+    if (hasTeam && teamName) {
+      ctx.font = `bold ${teamSize}px ${teamFontFamily}`;
+      const maxTeamWidth = w * 0.8;
+      teamWidth = ctx.measureText(teamName).width;
+      while (teamWidth > maxTeamWidth && teamSize > 10) {
+        teamSize -= 2;
+        ctx.font = `bold ${teamSize}px ${teamFontFamily}`;
+        teamWidth = ctx.measureText(teamName).width;
+      }
+    }
+    
+    // 3. Anchored layout spacing
+    // Participant Name is the primary anchor and remains perfectly centered in its original position
+    const nameYPos = autoY;
+    
+    // Draw Participant Name
+    ctx.fillStyle = fontColor;
+    ctx.font = `bold ${nameSize}px ${fontFamily}`;
+    ctx.fillText(name, autoX, nameYPos);
+    
+    if (hasTeam && teamName) {
+      // Team Name is drawn cleanly below the name, using a scaled vertical margin
+      const margin = Math.round(Math.max(14, Math.min(30, w * 0.015)));
+      const teamYPos = autoY + (nameSize / 2) + (teamSize / 2) + margin;
+      
+      // Draw Team Name
+      ctx.fillStyle = teamColor;
+      ctx.font = `bold ${teamSize}px ${teamFontFamily}`;
+      ctx.fillText(teamName, autoX, teamYPos);
+    }
+  } else {
+    // ---- MANUAL PLACEMENT MODE ----
+    const nameX = template.nameX ?? 50;
+    const nameY = template.nameY ?? 50;
+    const fontSize = template.nameFontSize ?? 48;
+    const scaledFontSize = Math.round(fontSize * scale);
+    const maxNameWidth = w * 0.9;
+    
+    drawTextWithFitting(ctx, name, w * nameX / 100, h * nameY / 100, scaledFontSize, fontFamily, align, fontColor, maxNameWidth);
+    
+    if (hasTeam && teamName) {
+      const teamX = template.teamX ?? 50;
+      const teamY = template.teamY ?? 60;
+      const teamFontSize = template.teamFontSize ?? 36;
+      const scaledTeamFontSize = Math.round(teamFontSize * scale);
+      const maxTeamWidth = w * 0.9;
+      
+      drawTextWithFitting(ctx, teamName, w * teamX / 100, h * teamY / 100, scaledTeamFontSize, teamFontFamily, teamAlign, teamColor, maxTeamWidth);
+    }
+  }
+}
+
+function updatePlacementModeUI() {
+  const isAuto = currentTemplateSettings.isAutoPlacement;
+  
+  const btnManual = document.getElementById('modeManualBtn');
+  const btnAuto = document.getElementById('modeAutoBtn');
+  if (btnManual && btnAuto) {
+    if (isAuto) {
+      btnManual.classList.remove('active');
+      btnAuto.classList.add('active');
+    } else {
+      btnManual.classList.add('active');
+      btnAuto.classList.remove('active');
+    }
+  }
+
+  const wrapperX = document.getElementById('wrapperX');
+  const wrapperY = document.getElementById('wrapperY');
+  const wrapperAlign = document.getElementById('wrapperAlign');
+  
+  const badgeX = document.getElementById('lockedBadgeX');
+  const badgeY = document.getElementById('lockedBadgeY');
+  const badgeAlign = document.getElementById('lockedBadgeAlign');
+  
+  const nameXInput = document.getElementById('nameX');
+  const nameYInput = document.getElementById('nameY');
+  const nameAlignSelect = document.getElementById('nameAlign');
+  
+  if (isAuto) {
+    wrapperX?.classList.add('field-auto-locked');
+    wrapperY?.classList.add('field-auto-locked');
+    wrapperAlign?.classList.add('field-auto-locked');
+    
+    if (badgeX) badgeX.style.display = 'inline-block';
+    if (badgeY) badgeY.style.display = 'inline-block';
+    if (badgeAlign) badgeAlign.style.display = 'inline-block';
+    
+    if (nameXInput) nameXInput.readOnly = true;
+    if (nameYInput) nameYInput.readOnly = true;
+    if (nameAlignSelect) nameAlignSelect.disabled = true;
+    
+    const label = document.getElementById('fontSizeLabel');
+    if (label) label.textContent = 'Max Font Size (px)';
+  } else {
+    wrapperX?.classList.remove('field-auto-locked');
+    wrapperY?.classList.remove('field-auto-locked');
+    wrapperAlign?.classList.remove('field-auto-locked');
+    
+    if (badgeX) badgeX.style.display = 'none';
+    if (badgeY) badgeY.style.display = 'none';
+    if (badgeAlign) badgeAlign.style.display = 'none';
+    
+    if (nameXInput) nameXInput.readOnly = false;
+    if (nameYInput) nameYInput.readOnly = false;
+    if (nameAlignSelect) nameAlignSelect.disabled = false;
+    
+    const label = document.getElementById('fontSizeLabel');
+    if (label) label.textContent = 'Font Size (px)';
+  }
+}
+
 function initTemplateEditor(t) {
   currentTemplateSettings = {
+    isAutoPlacement: t.isAutoPlacement ?? false,
+    autoY: t.autoY ?? 52,
+
     nameX: t.nameX ?? 50,
     nameY: t.nameY ?? 50,
     nameFontSize: t.nameFontSize ?? 48,
@@ -196,6 +462,7 @@ function initTemplateEditor(t) {
     selectorGroup.style.display = hasTeam ? 'block' : 'none';
   }
   
+  updatePlacementModeUI();
   updateControlsFromSettings();
 
   editorImg = new Image();
@@ -205,6 +472,19 @@ function initTemplateEditor(t) {
     if(canvas) {
       canvas.width = editorImg.naturalWidth;
       canvas.height = editorImg.naturalHeight;
+      
+      // Visual scanning fallback
+      if (!t.autoY) {
+        const detected = detectTemplateEmptyZone(editorImg);
+        currentTemplateSettings.autoY = detected.y;
+        if (!t.nameColor) currentTemplateSettings.nameColor = detected.textColor;
+        if (!t.teamColor) currentTemplateSettings.teamColor = detected.teamColor;
+        
+        if (currentTemplateSettings.isAutoPlacement) {
+          currentTemplateSettings.nameY = detected.y;
+        }
+      }
+      
       drawEditorPreview();
     }
   };
@@ -221,30 +501,7 @@ function drawEditorPreview() {
     ctx.drawImage(editorImg, 0, 0);
 
     const hasTeam = participants.some(p => p.teamName && p.teamName.trim() !== '');
-
-    // Draw Participant Name
-    {
-      const x = (currentTemplateSettings.nameX / 100) * canvas.width;
-      const y = (currentTemplateSettings.nameY / 100) * canvas.height;
-      const size = currentTemplateSettings.nameFontSize;
-      const color = currentTemplateSettings.nameColor;
-      const family = currentTemplateSettings.nameFontFamily;
-      const align = currentTemplateSettings.nameAlign;
-      const maxWidth = canvas.width * 0.9;
-      drawTextWithFitting(ctx, "Sample Name", x, y, size, family, align, color, maxWidth);
-    }
-
-    // Draw Team Name
-    if (hasTeam) {
-      const x = (currentTemplateSettings.teamX / 100) * canvas.width;
-      const y = (currentTemplateSettings.teamY / 100) * canvas.height;
-      const size = currentTemplateSettings.teamFontSize;
-      const color = currentTemplateSettings.teamColor;
-      const family = currentTemplateSettings.teamFontFamily;
-      const align = currentTemplateSettings.teamAlign;
-      const maxWidth = canvas.width * 0.9;
-      drawTextWithFitting(ctx, "Sample Team Name", x, y, size, family, align, color, maxWidth);
-    }
+    drawCertificateText(ctx, "Sample Name", "Sample Team Name", hasTeam, canvas.width, canvas.height, 1, currentTemplateSettings);
   });
 }
 
@@ -295,7 +552,35 @@ document.getElementById('editorFieldSelector')?.addEventListener('change', () =>
   drawEditorPreview();
 });
 
+// Segmented Placement Mode Buttons Trigger
+document.getElementById('modeManualBtn')?.addEventListener('click', () => {
+  currentTemplateSettings.isAutoPlacement = false;
+  updatePlacementModeUI();
+  updateControlsFromSettings();
+  drawEditorPreview();
+});
+
+document.getElementById('modeAutoBtn')?.addEventListener('click', () => {
+  currentTemplateSettings.isAutoPlacement = true;
+  if (editorImg && editorImg.complete) {
+    const detected = detectTemplateEmptyZone(editorImg);
+    currentTemplateSettings.autoY = detected.y;
+    currentTemplateSettings.nameY = detected.y;
+    currentTemplateSettings.nameX = 50;
+    currentTemplateSettings.nameAlign = 'center';
+  }
+  updatePlacementModeUI();
+  updateControlsFromSettings();
+  drawEditorPreview();
+});
+
+// Drag and drop interactive system
+let isDragging = false;
+let dragField = 'participant';
+
 document.getElementById('templateCanvas')?.addEventListener('mousedown', (e) => {
+  if (currentTemplateSettings.isAutoPlacement) return;
+  
   const canvas = e.target;
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
@@ -318,6 +603,9 @@ document.getElementById('templateCanvas')?.addEventListener('mousedown', (e) => 
     }
   }
 
+  dragField = field;
+  isDragging = true;
+
   const selector = document.getElementById('editorFieldSelector');
   if (selector && hasTeam) {
     selector.value = field;
@@ -329,6 +617,32 @@ document.getElementById('templateCanvas')?.addEventListener('mousedown', (e) => 
 
   updateControlsFromSettings();
   drawEditorPreview();
+});
+
+document.getElementById('templateCanvas')?.addEventListener('mousemove', (e) => {
+  if (!isDragging || currentTemplateSettings.isAutoPlacement) return;
+
+  const canvas = e.target;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  
+  const clickX = (e.clientX - rect.left) * scaleX;
+  const clickY = (e.clientY - rect.top) * scaleY;
+
+  const pctX = Math.round((clickX / canvas.width) * 100);
+  const pctY = Math.round((clickY / canvas.height) * 100);
+
+  const prefix = dragField === 'team' ? 'team' : 'name';
+  currentTemplateSettings[prefix + 'X'] = Math.max(0, Math.min(100, pctX));
+  currentTemplateSettings[prefix + 'Y'] = Math.max(0, Math.min(100, pctY));
+
+  updateControlsFromSettings();
+  drawEditorPreview();
+});
+
+window.addEventListener('mouseup', () => {
+  isDragging = false;
 });
 function renderSendStatus(){const tb=document.getElementById('sendStatusBody');if(!participants.length){tb.innerHTML='<tr><td colspan="5" class="table-empty"><span class="empty-icon">📨</span>No data</td></tr>';return}
 tb.innerHTML=participants.map(p=>`<tr><td>${p.name}</td><td>${p.email}</td><td>${p.certificateUrl?'✓ Ready':'—'}</td><td>${statusBadge(p.status)}</td><td>${p.status==='generated'?`<button class="btn-primary" style="font-size:.75rem;padding:4px 12px" onclick="sendSingleEmail('${p.id}')">Send</button>`:p.status==='sent'?'<span class="badge badge-success">Sent ✓</span>':'—'}</td></tr>`).join('')}
@@ -768,13 +1082,6 @@ if(!template || !template.templateUrl) {
 }
 console.log('Generating certificates using template URL:', template.templateUrl.substring(0,80)+'...');
 toast(`Generating ${list.length} certificates...`,'info');
-const nameX=template.nameX ?? parseInt((document.getElementById('nameX')?.value)||50);
-const nameY=template.nameY ?? parseInt((document.getElementById('nameY')?.value)||50);
-const fontSize=template.nameFontSize ?? parseInt((document.getElementById('nameFontSize')?.value)||48);
-const fontColor=template.nameColor ?? (document.getElementById('nameColor')?.value||'#1e293b');
-const fontFamily=template.nameFontFamily ?? (document.getElementById('nameFontFamily')?.value||'Inter, sans-serif');
-const align=template.nameAlign ?? (document.getElementById('nameAlign')?.value||'center');
-
 let successCount = 0;
 for(let i=0;i<list.length;i++){
   const p=list[i];
@@ -802,23 +1109,9 @@ for(let i=0;i<list.length;i++){
 
     // Scale font size proportionally if image was downscaled
     const scale = w / img.naturalWidth;
-    const scaledFontSize = Math.round(fontSize * scale);
-    const maxNameWidth = w * 0.9;
-    drawTextWithFitting(ctx, p.name, w*nameX/100, h*nameY/100, scaledFontSize, fontFamily, align, fontColor, maxNameWidth);
-
     const hasTeam = participants.some(x => x.teamName && x.teamName.trim() !== '');
-    if (hasTeam && p.teamName) {
-      const teamX = template.teamX ?? 50;
-      const teamY = template.teamY ?? 60;
-      const teamFontSize = template.teamFontSize ?? 36;
-      const teamFontFamily = template.teamFontFamily ?? 'Inter, sans-serif';
-      const teamAlign = template.teamAlign ?? 'center';
-      const teamColor = template.teamColor ?? '#475569';
-      
-      const scaledTeamFontSize = Math.round(teamFontSize * scale);
-      const maxTeamWidth = w * 0.9;
-      drawTextWithFitting(ctx, p.teamName, w*teamX/100, h*teamY/100, scaledTeamFontSize, teamFontFamily, teamAlign, teamColor, maxTeamWidth);
-    }
+    
+    drawCertificateText(ctx, p.name, p.teamName || '', hasTeam, w, h, scale, template);
 
     // Step 3: Convert to compressed base64
     const certDataUrl = canvas.toDataURL('image/jpeg', 0.5);
@@ -907,6 +1200,9 @@ document.getElementById('saveNamePos')?.addEventListener('click', async () => {
   
   const t = templates[0];
   const settings = {
+    isAutoPlacement: currentTemplateSettings.isAutoPlacement,
+    autoY: currentTemplateSettings.autoY,
+    
     nameX: currentTemplateSettings.nameX,
     nameY: currentTemplateSettings.nameY,
     nameFontSize: currentTemplateSettings.nameFontSize,

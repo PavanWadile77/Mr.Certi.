@@ -9,11 +9,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Hamburger menu
   const hamburger = document.getElementById('hamburger');
+  const navLinks = document.getElementById('navLinks');
+  const navOverlay = document.getElementById('navOverlay');
+
+  const toggleMobileNav = () => {
+    if(hamburger) hamburger.classList.toggle('open');
+    if(navLinks) navLinks.classList.toggle('active');
+    if(navOverlay) navOverlay.classList.toggle('active');
+  };
+  const closeMobileNav = () => {
+    if(hamburger) hamburger.classList.remove('open');
+    if(navLinks) navLinks.classList.remove('active');
+    if(navOverlay) navOverlay.classList.remove('active');
+  };
+
   if (hamburger) {
-    hamburger.addEventListener('click', () => {
-      // simple toggle for mobile nav items
-    });
+    hamburger.addEventListener('click', toggleMobileNav);
   }
+  if (navOverlay) {
+    navOverlay.addEventListener('click', closeMobileNav);
+  }
+  document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', closeMobileNav);
+  });
 
   // Open auth modal
   const authModal = document.getElementById('authModal');

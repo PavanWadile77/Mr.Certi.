@@ -110,6 +110,10 @@ All Firebase modules are loaded via CDN (`firebasejs/10.12.0`). Config is repeat
   - **Font Color** — native color picker + hex input + preset swatches
   - **Font Family** — 30+ Google fonts organized in groups (serif, cursive, modern)
   - **Alignment** — left/center/right
+  - **Primary-Anchored Dynamic Text Fitting & Spacing Layout**:
+   - Implemented dynamic text scaling to automatically shrink font sizes down to fit names within safe margins (max 80% width) and prevent overflow.
+   - Anchored the **Participant Name** exactly at its original, auto-detected center coordinate (`autoY`) above the divider line.
+   - Positioned the **Team Name** independently and dynamically below the Participant Name with a scaled vertical margin, ensuring the presence of a Team Name does not shift the Participant Name's vertical placement or alter the template's layout boundaries.
 - Settings saved to Firestore `certificates/{id}` document (saves both name and team name styles)
 
 ### Certificate Generation (`generateCerts`)
