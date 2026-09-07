@@ -1,5 +1,5 @@
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";import{getFirestore,collection,doc,setDoc,getDoc,getDocs,deleteDoc,query,where,orderBy,serverTimestamp,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-const firebaseConfig={apiKey:"AIzaSyBuTV1Yeh77iWt8nJ8V09gUNUhagyhg4iY",authDomain:"mr-certi.firebaseapp.com",projectId:"mr-certi",storageBucket:"mr-certi.firebasestorage.app",messagingSenderId:"60676407665",appId:"1:60676407665:web:1113311464e6b6dc45b6d0",measurementId:"G-CRDZXN6TYD"};
+const firebaseConfig={apiKey:"AIzaSyBuTV1Yeh77iWt8nJ8V09gUNUhagyhg4iY",authDomain:"mr-certi.firebaseapp.com",databaseURL:"https://mr-certi-default-rtdb.firebaseio.com",projectId:"mr-certi",storageBucket:"mr-certi.firebasestorage.app",messagingSenderId:"60676407665",appId:"1:60676407665:web:1113311464e6b6dc45b6d0",measurementId:"G-CRDZXN6TYD"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 let currentUser=null,participants=[],templates=[];
 

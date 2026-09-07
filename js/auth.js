@@ -6,6 +6,7 @@ import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "https://www.
 const firebaseConfig = {
   apiKey: "AIzaSyBuTV1Yeh77iWt8nJ8V09gUNUhagyhg4iY",
   authDomain: "mr-certi.firebaseapp.com",
+  databaseURL: "https://mr-certi-default-rtdb.firebaseio.com",
   projectId: "mr-certi",
   storageBucket: "mr-certi.firebasestorage.app",
   messagingSenderId: "60676407665",

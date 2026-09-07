@@ -287,7 +287,7 @@
           <div class="card-header">
             <span class="card-title">Quick Actions</span>
           </div>
-          <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+          <div class="card-body quick-actions-grid">
             <button class="feature-card" style="text-align:left;cursor:pointer;border:none" onclick="switchPanel('participants')">
               <div class="feature-icon" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd)">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#0ea5e9" stroke-width="2"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"/></svg>
@@ -403,9 +403,9 @@
               </tbody>
             </table>
           </div>
-          <div class="card-footer" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div class="card-footer page-footer-actions">
             <span style="font-size:.82rem;color:var(--gray-500)" id="participantPagination">Showing 0 of 0</span>
-            <div style="display:flex;gap:8px">
+            <div class="bulk-actions-group">
               <button class="btn-outline" style="border-color:var(--red-500);color:var(--red-500);" id="bulkDelete">🗑️ Delete Selected</button>
               <button class="btn-outline" id="bulkGenerate">⚡ Generate Selected</button>
               <button class="btn-outline" id="bulkSend">📨 Send Selected</button>
@@ -557,7 +557,7 @@
       <div class="panel" id="panel-certificates">
         <div class="page-header">
           <h1 class="page-title">Generated Certificates</h1>
-          <div class="page-actions" style="display:flex;gap:10px;">
+          <div class="page-actions">
             <button class="btn-outline" id="printAllBtn">🖨️ Print All</button>
             <button class="btn-primary" id="generateAllBtn">⚡ Generate All</button>
           </div>
@@ -599,14 +599,14 @@
           <div class="card-body">
             <div class="form-group"><label>Email Subject</label><input type="text" id="emailSubject" value="Your Certificate is Ready – Mr.Certi"/></div>
             <div class="form-group"><label>Email Message</label>
-              <textarea id="emailBody" rows="4">Dear {name},
+              <textarea id="emailBody" rows="4" style="width:100%; max-width:100%; box-sizing:border-box;">Dear {name},
 
 Your certificate is now available. You can view and download it by logging into Mr.Certi.
 
 Best regards,
 The Organizer</textarea>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="send-actions">
               <button class="btn-primary" id="sendAllBtn">📨 Send to All (Generated)</button>
               <button class="btn-outline" id="sendPendingBtn">Send to Pending Only</button>
             </div>

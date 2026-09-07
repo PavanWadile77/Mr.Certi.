@@ -8,6 +8,7 @@ import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.0/firebas
 const firebaseConfig = {
   apiKey: "AIzaSyBuTV1Yeh77iWt8nJ8V09gUNUhagyhg4iY",
   authDomain: "mr-certi.firebaseapp.com",
+  databaseURL: "https://mr-certi-default-rtdb.firebaseio.com",
   projectId: "mr-certi",
   storageBucket: "mr-certi.firebasestorage.app",
   messagingSenderId: "60676407665",
